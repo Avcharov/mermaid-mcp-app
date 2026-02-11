@@ -61,6 +61,13 @@ Avoid \`<\`, \`>\`, \`&\`, quotes in node labels. Use plain text only.
 - GOOD: \`A[Check if valid]\`
 - BAD: \`A[Check <status> & validate]\`
 
+### Rule 8: NEVER use colons (:) or commas (,) in state diagram labels
+State diagrams use colons for syntax. Using them in labels causes parse errors.
+- BAD: \`S1: Terminal: Reward -1\`
+- GOOD: \`S1: Terminal Reward -1\`
+- BETTER: \`S1: TerminalReward\`
+Replace colons and commas with spaces, dashes, or underscores.
+
 ## Diagram Types
 
 ### Flowchart
@@ -116,6 +123,14 @@ stateDiagram-v2
     Success --> [*]
     Error --> Idle: retry
 \`\`\`
+
+**CRITICAL State Diagram Rules:**
+- Transition labels CANNOT contain colons (:) - use dash or space instead
+- State descriptions: Use simple text WITHOUT colons, commas, or special chars
+- BAD: "State: Description, Value: 5"  → GOOD: "State Description Value 5"
+- BAD: "Terminal: Reward -1" → GOOD: "Terminal Reward -1"
+- For complex descriptions, use underscores: "Terminal_Reward_Minus_1"
+- Keep all labels SHORT and simple (2-4 words max)
 
 ### Entity Relationship Diagram
 \`\`\`mermaid
@@ -177,14 +192,12 @@ journey
 
 ## Themes
 
-Available themes for the create_view tool:
-- **default** - Standard Mermaid theme (light background)
-- **forest** - Green forest theme
-- **dark** - Dark background theme
-- **neutral** - Neutral gray theme
-- **base** - Minimal base theme
+The app auto-detects light/dark mode from the host. Available theme values for the create_view tool:
+- **default** - Auto-detect (light or dark based on host)
+- **dark** - Force dark mode
+- **forest** / **neutral** / **base** - Custom Mermaid built-in palettes (shown as \"Custom\" in the dropdown)
 
-Set theme via the \`theme\` parameter in create_view.
+Set theme via the \`theme\` parameter in create_view. Usually omit it to let auto-detection work.
 
 ## Styling Tips
 
@@ -223,6 +236,83 @@ flowchart TD
        end
        B --> C
    \`\`\`
+
+## CRITICAL: Layout & Readability Rules
+
+Mermaid uses automatic layout (Dagre/Elk). You MUST design for it to produce clean diagrams.
+
+### Rule 1: Choose direction wisely
+- **LR** (left-right) is BEST for wide diagrams with many parallel paths (grids, state machines, pipelines)
+- **TD** (top-down) is best for hierarchical/tree diagrams
+- NEVER use TD for grid-like structures (causes massive line crossings)
+
+### Rule 2: Limit connections per node
+- Max 3-4 outgoing edges per node. More causes spaghetti lines.
+- If a node has 5+ connections, refactor: group into subgraphs OR use intermediate nodes
+
+### Rule 3: Simplify complex graphs - use subgraphs for clusters
+For grid-like problems (game boards, matrices, state spaces), group rows/columns:
+\`\`\`mermaid
+flowchart LR
+    subgraph Row1
+        direction LR
+        A1[S00] --> A2[S01] --> A3[S02]
+    end
+    subgraph Row2
+        direction LR
+        B1[S10] --> B2[S11] --> B3[S12]
+    end
+    A1 --> B1
+    A2 --> B2
+    A3 --> B3
+\`\`\`
+
+### Rule 4: Use invisible links to control layout
+\`\`\`mermaid
+flowchart LR
+    A ~~~ B
+\`\`\`
+Use \`~~~\` (invisible link) to force node placement without drawing a line.
+
+### Rule 5: For state machines & MDPs — simplify!
+- Do NOT draw ALL transitions. Show the MOST IMPORTANT ones.
+- Group states by region/type using subgraphs
+- Use a legend or note instead of labeling every edge
+- For NxN grids, show structure (grid layout) and annotate key transitions
+- Use dotted lines for less important transitions: \`A -.-> B\`
+
+### Rule 6: Edge order matters for layout
+Mermaid lays out nodes in the order they first appear. Define edges in a logical order:
+- Define left-to-right or top-to-bottom connections FIRST
+- Define cross-connections AFTER the main flow
+- This minimizes edge crossings
+
+### Rule 7: Use link labels sparingly
+- Don't label every edge — it adds clutter
+- Label only decision branches or key transitions
+- Use \`-->|label|\` only when the label adds essential meaning
+
+### Rule 8: For dense graphs, prefer sequence or state diagrams
+- Flowcharts with >15 nodes and cross-connections become unreadable
+- Use \`stateDiagram-v2\` for state machines instead of flowchart
+- Use \`sequenceDiagram\` for process flows with back-and-forth
+- Use \`graph\` only for simple DAGs
+
+### Rule 9: Max complexity guidelines
+- **Simple** (< 10 nodes): Any diagram type works
+- **Medium** (10-20 nodes): Use subgraphs, limit edges, choose LR
+- **Complex** (20+ nodes): MUST simplify — split into multiple diagrams, show overview + detail, or omit less important edges
+
+### Rule 10: Color-code for clarity
+Use classDef to visually distinguish node types:
+\`\`\`mermaid
+flowchart LR
+    classDef start fill:#4CAF50,color:#fff
+    classDef danger fill:#f44336,color:#fff
+    classDef goal fill:#2196F3,color:#fff
+    A[Start]:::start --> B[Hole]:::danger
+    A --> C[Goal]:::goal
+\`\`\`
 
 ## Common Patterns
 
@@ -302,9 +392,10 @@ export function registerTools(server: McpServer, distDir: string): void {
     "create_view",
     {
       title: "Draw Mermaid Diagram",
-      description: `Renders a Mermaid diagram with streaming preview animations.
-Supports all Mermaid diagram types (flowchart, sequence, class, state, ER, gantt, pie, etc.).
-Call read_me first to learn Mermaid syntax.`,
+      description: `Renders a Mermaid diagram. Call read_me first for syntax.
+LAYOUT RULES: Use LR for grids/state machines. Limit 3-4 edges per node. Use subgraphs to cluster related nodes.
+For complex graphs (>15 nodes): simplify by omitting less important edges, color-code node types, prefer stateDiagram-v2 for state machines.
+NEVER draw ALL transitions in dense graphs — show key paths and annotate.`,
       inputSchema: z.object({
         mermaid: z.string().describe(
           `Mermaid diagram syntax. STREAMING RULES (mandatory):
@@ -312,9 +403,10 @@ Call read_me first to learn Mermaid syntax.`,
 2. NEVER use <br/> or any HTML tags in labels
 3. Keep labels short: 2-4 words max
 4. No special chars (<, >, &) in labels
-5. Define connections immediately with nodes
-6. Avoid subgraphs when possible
-7. Use short node IDs (A, B, C or step1, step2)
+5. NEVER use colons (:) or commas (,) in state diagram labels
+6. Define connections immediately with nodes
+7. Avoid subgraphs when possible
+8. Use short node IDs (A, B, C or step1, step2)
 Call read_me first for full syntax reference.`
         ),
         theme: z
@@ -382,12 +474,12 @@ Call read_me first for full syntax reference.`
     },
   );
 
-  // CSP: allow Mermaid to load from CDN
+  // CSP: allow libs to load from CDN
   const cspMeta = {
     ui: {
       csp: {
-        resourceDomains: ["https://cdn.jsdelivr.net"],
-        connectDomains: ["https://cdn.jsdelivr.net"],
+        resourceDomains: ["https://cdn.jsdelivr.net", "https://esm.sh"],
+        connectDomains: ["https://cdn.jsdelivr.net", "https://esm.sh"],
       },
     },
   };
