@@ -25,80 +25,6 @@ interface PanZoomState {
 // Helpers
 // ============================================================
 
-function parsePartialMermaid(args: Record<string, unknown> | undefined): Partial<DiagramState> {
-  if (!args) return {};
-  
-  const result: Partial<DiagramState> = {};
-  
-  if (typeof args.mermaid === 'string') {
-    result.mermaid = args.mermaid;
-  }
-  if (typeof args.theme === 'string') {
-    result.theme = args.theme;
-  }
-  if (typeof args.title === 'string') {
-    result.title = args.title;
-  }
-  
-  return result;
-}
-
-/**
- * Sanitise a partial (still-streaming) mermaid string so the parser
- * has a better chance of producing output instead of throwing.
- *
- * Strategy:
- * 1. Drop the last (probably incomplete) line.
- * 2. Strip dangling HTML-like tags that were cut mid-tag, e.g. `<b`
- * 3. Balance any unclosed brackets / parentheses on the remaining
- *    tail so that node definitions are valid.
- */
-function sanitizePartialMermaid(raw: string): string {
-  if (!raw) return raw;
-
-  const lines = raw.split('\n');
-
-  // Always drop the last line – it is most likely incomplete.
-  if (lines.length > 1) {
-    lines.pop();
-  } else {
-    // Only one line (the diagram header like "flowchart TD") – return as-is
-    return raw;
-  }
-
-  let cleaned = lines.join('\n');
-
-  // Remove a trailing partial HTML tag, e.g.  "<b" or "<br" at the very end
-  cleaned = cleaned.replace(/<[a-zA-Z/][^>]*$/m, '');
-
-  // Remove a trailing partial entity, e.g.  "&amp" missing the semicolon
-  cleaned = cleaned.replace(/&[a-zA-Z0-9#]*$/m, '');
-
-  // Balance unclosed brackets on the *last* remaining line
-  const lastNewline = cleaned.lastIndexOf('\n');
-  const lastLine = lastNewline === -1 ? cleaned : cleaned.slice(lastNewline + 1);
-  const openers: Record<string, string> = { '[': ']', '(': ')', '{': '}' };
-  const stack: string[] = [];
-
-  for (const ch of lastLine) {
-    if (openers[ch]) {
-      stack.push(openers[ch]);
-    } else if (Object.values(openers).includes(ch)) {
-      // Pop matching opener
-      if (stack.length > 0 && stack[stack.length - 1] === ch) {
-        stack.pop();
-      }
-    }
-  }
-
-  // Close any unclosed brackets so the node text is valid
-  if (stack.length > 0) {
-    cleaned += stack.reverse().join('');
-  }
-
-  return cleaned;
-}
-
 const ExpandIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M8.5 1.5H12.5V5.5" />
@@ -134,9 +60,6 @@ function MermaidApp() {
   
   const svgContainerRef = useRef<HTMLDivElement>(null);
   const isPanningRef = useRef(false);
-  const lastRenderTimeRef = useRef(0);
-  const pendingRenderRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isStreamingRef = useRef(false);
   const renderingRef = useRef(false);
   const lastMousePosRef = useRef({ x: 0, y: 0 });
 
@@ -144,46 +67,12 @@ function MermaidApp() {
     appInfo: { name: "Mermaid Diagram App", version: "1.0.0" },
     capabilities: {},
     onAppCreated: (app) => {
-      app.ontoolinputpartial = async (input) => {
+      app.ontoolinputpartial = async (_input) => {
         setIsStreaming(true);
-        isStreamingRef.current = true;
-        const partial = parsePartialMermaid(input.arguments);
-        if (partial.mermaid) {
-          const sanitized = sanitizePartialMermaid(partial.mermaid);
-          
-          // Throttle: render at most once every 300ms, but always schedule
-          // the latest version so it eventually renders.
-          const now = Date.now();
-          const elapsed = now - lastRenderTimeRef.current;
-
-          if (pendingRenderRef.current) {
-            clearTimeout(pendingRenderRef.current);
-          }
-
-          const doRender = async () => {
-            if (renderingRef.current) return; // skip if a render is in progress
-            lastRenderTimeRef.current = Date.now();
-            await renderMermaid(sanitized, partial.theme || "default", true);
-          };
-
-          if (elapsed >= 300) {
-            // Enough time passed since last render - render now
-            doRender();
-          } else {
-            // Schedule render for the remaining time
-            pendingRenderRef.current = setTimeout(doRender, 300 - elapsed);
-          }
-        }
       };
 
       app.ontoolinput = async (input) => {
-        // Cancel any pending throttled render
-        if (pendingRenderRef.current) {
-          clearTimeout(pendingRenderRef.current);
-          pendingRenderRef.current = null;
-        }
         setIsStreaming(false);
-        isStreamingRef.current = false;
         const args = input.arguments as Record<string, unknown>;
         const mermaidSyntax = (args.mermaid as string) || "";
         const theme = (args.theme as string) || "default";
