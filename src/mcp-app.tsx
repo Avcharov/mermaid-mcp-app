@@ -130,6 +130,7 @@ function MermaidApp() {
   const renderingRef = useRef(false);
   const lastMousePosRef = useRef({ x: 0, y: 0 });
   const userSelectedThemeRef = useRef(false);
+  const fullscreenFittedRef = useRef(false);
 
   const { app, error: appError } = useApp({
     appInfo: { name: "Mermaid Diagram App", version: "1.0.0" },
@@ -408,9 +409,13 @@ function MermaidApp() {
   }, [calcFitView]);
 
   // Auto-fit when entering fullscreen — wait for the HOST to actually resize the viewport
-  // (not just our local displayMode state change, which happens before the host expands)
+  // Only runs once per fullscreen entry (not on every SVG re-render from editing)
   useEffect(() => {
-    if (displayMode !== "fullscreen") return;
+    if (displayMode !== "fullscreen") {
+      fullscreenFittedRef.current = false;
+      return;
+    }
+    if (fullscreenFittedRef.current) return;
     const el = previewViewportRef.current;
     if (!el) return;
     if (!renderedSvg) return;
@@ -442,6 +447,7 @@ function MermaidApp() {
         }
         if (stableFrames >= 3) {
           fitted = true;
+          fullscreenFittedRef.current = true;
           applyFitView();
           return;
         }
