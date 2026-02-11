@@ -14,6 +14,14 @@ A streamable MCP App server that renders interactive Mermaid diagrams with live 
 - **Export with Spinner** - Copy SVGO-optimized SVG to clipboard (spinner indicates progress)
 - **Client-side Rendering** - No server dependencies, runs entirely in the browser
 
+## Quick Start
+
+### Remote (Vercel)
+
+Use the hosted endpoint: `https://mermaid-mcp-app.vercel.app/mcp`
+
+Add as a remote MCP server in your client. For example, in [claude.ai](https://claude.ai): **Settings** → **Connectors** → **Add custom connector** → paste the URL above.
+
 ## Installation
 
 ```bash
@@ -67,7 +75,7 @@ Deploy to Vercel for remote access:
 npx vercel
 ```
 
-The MCP endpoint will be available at `https://your-deployment.vercel.app/mcp`
+The MCP endpoint will be available at `https://mermaid-mcp-app.vercel.app/mcp`
 
 ## MCP Tools
 
