@@ -4,12 +4,14 @@ A streamable MCP App server that renders interactive Mermaid diagrams with live 
 
 ## Features
 
-- **Streaming Preview** - Watch diagrams render progressively as the model generates them
-- **Interactive Pan/Zoom** - Navigate large diagrams with mouse controls
-- **Fullscreen Editor** - Edit Mermaid syntax with live preview
-- **Theme Switching** - Choose from 5 built-in Mermaid themes
+- **Complete Rendering** - Waits for full diagram generation before displaying (no partial/streaming output)
+- **SVGO Optimization** - Automatic SVG optimization reduces file size by ~85%
+- **Dark Mode** - Auto-detects system theme with neutral gray palette
+- **Interactive Pan/Zoom** - Navigate large diagrams with wheel zoom and drag controls
+- **Fullscreen Editor** - Edit Mermaid syntax with live preview, zoom controls (+/−/1:1)
+- **Theme Switching** - Light, Dark, or Custom (agent-provided) themes
 - **All Diagram Types** - Flowcharts, sequence, class, state, ER, gantt, pie, git graphs, and more
-- **Export** - Copy SVG to clipboard for external use
+- **Export with Spinner** - Copy SVGO-optimized SVG to clipboard (spinner indicates progress)
 - **Client-side Rendering** - No server dependencies, runs entirely in the browser
 
 ## Installation
@@ -77,12 +79,17 @@ Returns comprehensive Mermaid syntax reference with examples for all diagram typ
 
 ### `create_view`
 
-Renders a Mermaid diagram with streaming animations.
+Renders a Mermaid diagram. The diagram is fully rendered before being displayed (no progressive/streaming rendering).
 
 **Parameters**:
 - `mermaid` (string, required) - Mermaid diagram syntax
-- `theme` (string, optional) - One of: `default`, `forest`, `dark`, `neutral`, `base`
+- `theme` (string, optional) - One of: `default` (auto-detect), `forest`, `dark`, `neutral`, `base`
 - `title` (string, optional) - Title to display above the diagram
+
+**Notes**:
+- Default theme auto-detects system dark mode and applies neutral gray palette
+- Agent can specify built-in Mermaid themes (`forest`, `dark`, `neutral`, `base`) which appear as "Custom" in UI
+- Fullscreen mode includes zoom controls (+, −, 1:1, wheel zoom) and pan/drag
 
 **Example**:
 ```typescript
@@ -95,7 +102,12 @@ Renders a Mermaid diagram with streaming animations.
 
 ### `export_svg` (app-only)
 
-Export the rendered diagram as SVG. Called by the UI, not by the model.
+Export the rendered diagram as optimized SVG using SVGO. Called by the UI export button (spinner icon during processing).
+
+**Optimization**:
+- SVGO reduces SVG size by ~85% (e.g., 334KB → 51KB)
+- Rounds coordinates to 2 decimal places
+- Preserves viewBox and mermaid IDs for proper rendering
 
 ## Architecture
 
@@ -103,9 +115,10 @@ Export the rendered diagram as SVG. Called by the UI, not by the model.
   - Supports both Streamable HTTP and stdio transports
   - Stateless per-request design (no sessions)
 - **UI**: React 19 with Mermaid.js
-  - Loaded from CDN (jsdelivr) via importmap
+  - Loaded from CDN (jsdelivr for Mermaid, esm.sh for React) via importmap
   - Client-side rendering for zero server dependencies
-  - Single-file HTML bundle via Vite
+  - Single-file HTML bundle (~402KB) via Vite + vite-plugin-singlefile
+  - SVGO server-side optimization for exports
 - **Build**: TypeScript + Vite + Bun
   - Type-safe server and client code
   - Optimized production bundles
@@ -115,11 +128,12 @@ Export the rendered diagram as SVG. Called by the UI, not by the model.
 ```
 mermaid-mcp-app/
 ├── src/
-│   ├── server.ts          # MCP server with tool registration
+│   ├── server.ts          # MCP server with tool registration + SVGO
 │   ├── main.ts            # Transport layer (HTTP + stdio)
 │   ├── mcp-app.html       # HTML shell with importmap
 │   ├── mcp-app.tsx        # React UI component
-│   └── global.css         # Styles
+│   ├── theme-vars.ts      # Mermaid theme color palettes
+│   └── global.css         # Styles (dark mode, animations)
 ├── api/
 │   └── mcp.ts            # Vercel serverless handler
 ├── dist/                  # Build output
@@ -138,6 +152,7 @@ mermaid-mcp-app/
 - [MCP SDK](https://github.com/modelcontextprotocol/sdk) - Model Context Protocol
 - [ext-apps](https://github.com/modelcontextprotocol/ext-apps) - MCP Apps extension
 - [Mermaid.js](https://mermaid.js.org/) - Diagram generation
+- [SVGO](https://github.com/svg/svgo) - SVG optimization (server-side)
 - [React 19](https://react.dev/) - UI framework
 - [Vite](https://vitejs.dev/) - Build tool
 - [TypeScript](https://www.typescriptlang.org/) - Type safety
