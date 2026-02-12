@@ -363,14 +363,19 @@ function MermaidApp() {
 
   // Copy text to clipboard using textarea fallback (works in sandboxed iframes
   // where navigator.clipboard loses user gesture context after async calls)
-  const copyToClipboard = useCallback((text: string) => {
+  const copyToClipboard = useCallback(async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {}
     const textarea = document.createElement("textarea");
     textarea.value = text;
     textarea.style.position = "fixed";
     textarea.style.left = "-9999px";
     document.body.appendChild(textarea);
+    textarea.focus();
     textarea.select();
-    document.execCommand("copy");
+    try { document.execCommand("copy"); } catch {}
     document.body.removeChild(textarea);
   }, []);
 
@@ -388,7 +393,7 @@ function MermaidApp() {
       // Get the optimized SVG from the tool result content
       const firstContent = result.content?.[0];
       const optimizedSvg = (firstContent && "text" in firstContent ? firstContent.text : null) || renderedSvg;
-      copyToClipboard(optimizedSvg);
+      await copyToClipboard(optimizedSvg);
       console.info(`SVG optimized & copied (${Math.round(optimizedSvg.length / 1024)}KB, was ${Math.round(renderedSvg.length / 1024)}KB)`);
     } catch (err) {
       console.error("Export error:", err);
