@@ -361,46 +361,57 @@ function MermaidApp() {
     await renderMermaid(editedMermaid || diagramState.mermaid, newTheme, false);
   }, [editedMermaid, diagramState.mermaid]);
 
-  // Copy text to clipboard using textarea fallback (works in sandboxed iframes
-  // where navigator.clipboard loses user gesture context after async calls)
-  const copyToClipboard = useCallback(async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      return;
-    } catch {}
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.style.position = "fixed";
-    textarea.style.left = "-9999px";
-    document.body.appendChild(textarea);
-    textarea.focus();
-    textarea.select();
-    try { document.execCommand("copy"); } catch {}
-    document.body.removeChild(textarea);
-  }, []);
-
-  // Export handler: send raw SVG to server for SVGO optimization, then copy result to clipboard
+  // Export handler: send raw SVG to server for SVGO optimization, then copy result to clipboard.
+  // Uses ClipboardItem with a deferred blob promise so clipboard.write() is called
+  // synchronously during the user gesture (preserving activation), while the
+  // actual optimized SVG data resolves asynchronously from the server.
   const handleExport = useCallback(async () => {
     if (!app || !renderedSvg || isExporting) return;
     
     setIsExporting(true);
-    try {
-      const result = await app.callServerTool({
-        name: "export_svg",
-        arguments: { svg: renderedSvg, format: "svg" },
-      });
 
-      // Get the optimized SVG from the tool result content
-      const firstContent = result.content?.[0];
-      const optimizedSvg = (firstContent && "text" in firstContent ? firstContent.text : null) || renderedSvg;
-      await copyToClipboard(optimizedSvg);
-      console.info(`SVG optimized & copied (${Math.round(optimizedSvg.length / 1024)}KB, was ${Math.round(renderedSvg.length / 1024)}KB)`);
+    const svgPromise = (async () => {
+      try {
+        const result = await app.callServerTool({
+          name: "export_svg",
+          arguments: { svg: renderedSvg, format: "svg" },
+        });
+        const firstContent = result.content?.[0];
+        const optimizedSvg = (firstContent && "text" in firstContent ? firstContent.text : null) || renderedSvg;
+        console.info(`SVG optimized (${Math.round(optimizedSvg.length / 1024)}KB, was ${Math.round(renderedSvg.length / 1024)}KB)`);
+        return optimizedSvg;
+      } catch (err) {
+        console.error("SVGO optimization failed, using raw SVG:", err);
+        return renderedSvg;
+      }
+    })();
+
+    try {
+      const item = new ClipboardItem({
+        'text/plain': svgPromise.then(text => new Blob([text], { type: 'text/plain' })),
+      });
+      await navigator.clipboard.write([item]);
+      console.info("SVG copied to clipboard");
     } catch (err) {
-      console.error("Export error:", err);
+      console.warn("ClipboardItem failed, trying fallback:", err);
+      const text = await svgPromise;
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        try { document.execCommand("copy"); } catch {}
+        document.body.removeChild(textarea);
+      }
     } finally {
       setIsExporting(false);
     }
-  }, [app, renderedSvg, copyToClipboard, isExporting]);
+  }, [app, renderedSvg, isExporting]);
 
   // Calculate zoom + pan to fit and center the diagram in the viewport
   const calcFitView = useCallback((viewportEl: HTMLDivElement | null): { zoom: number; pan: { x: number; y: number } } => {
