@@ -211,9 +211,11 @@ function MermaidApp() {
         setError(error.message);
       };
 
-      app.onhostcontextchanged = (params) => {
+      app.onhostcontextchanged = (params: any) => {
         console.info("Host context changed:", params);
-        // Re-detect dark mode when host theme changes
+        if (params.displayMode) {
+          setDisplayMode(params.displayMode as "inline" | "fullscreen");
+        }
         const isDark = detectDarkMode();
         setHostDark(isDark);
       };
