@@ -8,6 +8,7 @@ if (!INPUT) {
 }
 
 const isDevelopment = process.env.NODE_ENV === "development";
+const devParam = isDevelopment ? "?dev" : "";
 
 export default defineConfig({
   plugins: [react(), viteSingleFile()],
@@ -26,10 +27,10 @@ export default defineConfig({
       ],
       output: {
         paths: {
-          "react": "https://esm.sh/react@19.2.0",
-          "react-dom": "https://esm.sh/react-dom@19.2.0?deps=react@19.2.0",
-          "react-dom/client": "https://esm.sh/react-dom@19.2.0/client?deps=react@19.2.0",
-          "react/jsx-runtime": "https://esm.sh/react@19.2.0/jsx-runtime",
+          "react": `https://esm.sh/react@19.2.0${devParam}`,
+          "react-dom": `https://esm.sh/react-dom@19.2.0?deps=react@19.2.0${devParam ? "&dev" : ""}`,
+          "react-dom/client": `https://esm.sh/react-dom@19.2.0/client?deps=react@19.2.0${devParam ? "&dev" : ""}`,
+          "react/jsx-runtime": `https://esm.sh/react@19.2.0/jsx-runtime${devParam}`,
           "mermaid": "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs",
         },
         entryFileNames: "mcp-app.js",
