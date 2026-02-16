@@ -43,6 +43,15 @@ const SpinnerIcon = () => (
   </svg>
 );
 
+const CollapseIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M1.5 8.5H5.5V12.5" />
+    <path d="M12.5 5.5H8.5V1.5" />
+    <path d="M5.5 8.5L1.5 12.5" />
+    <path d="M8.5 5.5L12.5 1.5" />
+  </svg>
+);
+
 // ============================================================
 // Main Component
 // ============================================================
@@ -126,6 +135,7 @@ function MermaidApp() {
   // Tracks the agent-provided built-in mermaid theme name (e.g. "forest", "neutral")
   const [agentCustomTheme, setAgentCustomTheme] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportSuccess, setExportSuccess] = useState(false);
   const agentCustomThemeRef = useRef<string | null>(null);
   const [renderedSvg, setRenderedSvg] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -137,6 +147,7 @@ function MermaidApp() {
   const [previewPan, setPreviewPan] = useState({ x: 0, y: 0 });
   const [editorWidthPct, setEditorWidthPct] = useState(35);
   const isDraggingSplitterRef = useRef(false);
+  const isDev = import.meta.env.DEV;
   
   const svgContainerRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -369,11 +380,15 @@ function MermaidApp() {
       });
       await navigator.clipboard.write([item]);
       console.info("SVG copied to clipboard");
+      setExportSuccess(true);
+      setTimeout(() => setExportSuccess(false), 2000);
     } catch (err) {
       console.warn("ClipboardItem failed, trying fallback:", err);
       const text = await svgPromise;
       try {
         await navigator.clipboard.writeText(text);
+        setExportSuccess(true);
+        setTimeout(() => setExportSuccess(false), 2000);
       } catch {
         const textarea = document.createElement("textarea");
         textarea.value = text;
@@ -382,7 +397,11 @@ function MermaidApp() {
         document.body.appendChild(textarea);
         textarea.focus();
         textarea.select();
-        try { document.execCommand("copy"); } catch {}
+        try { 
+          document.execCommand("copy");
+          setExportSuccess(true);
+          setTimeout(() => setExportSuccess(false), 2000);
+        } catch {}
         document.body.removeChild(textarea);
       }
     } finally {
@@ -584,9 +603,25 @@ function MermaidApp() {
                 <option value="custom">Custom ({agentCustomTheme})</option>
               )}
             </select>
-            <button onClick={handleExport} className="icon-btn" title="Export SVG" disabled={isExporting}>
+            <button 
+              onClick={handleExport} 
+              className="icon-btn" 
+              title="Export SVG" 
+              disabled={isExporting}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: exportSuccess ? 80 : 'auto' }}
+            >
               {isExporting ? <SpinnerIcon /> : <DownloadIcon />}
+              {exportSuccess && <span style={{ fontSize: '0.75rem' }}>Copied!</span>}
             </button>
+            {isDev && (
+              <button 
+                onClick={handleFullscreenToggle}
+                className="icon-btn" 
+                title="Exit Fullscreen (Dev)"
+              >
+                <CollapseIcon />
+              </button>
+            )}
           </div>
         </div>
         <div className="fullscreen-content">
