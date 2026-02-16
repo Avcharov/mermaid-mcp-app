@@ -16,12 +16,6 @@ interface DiagramState {
   checkpointId?: string;
 }
 
-interface PanZoomState {
-  scale: number;
-  translateX: number;
-  translateY: number;
-}
-
 // ============================================================
 // Helpers
 // ============================================================
@@ -137,7 +131,6 @@ function MermaidApp() {
   const [error, setError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [displayMode, setDisplayMode] = useState<"inline" | "fullscreen">("inline");
-  const [panZoom, setPanZoom] = useState<PanZoomState>({ scale: 1, translateX: 0, translateY: 0 });
   const [editedMermaid, setEditedMermaid] = useState("");
   const [isOverflowing, setIsOverflowing] = useState(false);
   const [previewZoom, setPreviewZoom] = useState(1);
@@ -313,7 +306,7 @@ function MermaidApp() {
     return () => clearTimeout(timer);
   }, [renderedSvg]);
 
-  // Pan/zoom handlers (work in both inline and fullscreen)
+  // Pan/zoom handlers (fullscreen only)
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     isPanningRef.current = true;
     lastMousePosRef.current = { x: e.clientX, y: e.clientY };
@@ -325,17 +318,8 @@ function MermaidApp() {
     const dx = e.clientX - lastMousePosRef.current.x;
     const dy = e.clientY - lastMousePosRef.current.y;
     lastMousePosRef.current = { x: e.clientX, y: e.clientY };
-
-    if (displayMode === "inline") {
-      setPanZoom((prev) => ({
-        ...prev,
-        translateX: prev.translateX + dx,
-        translateY: prev.translateY + dy,
-      }));
-    } else {
-      setPreviewPan((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
-    }
-  }, [displayMode]);
+    setPreviewPan((prev) => ({ x: prev.x + dx, y: prev.y + dy }));
+  }, []);
 
   const handleMouseUp = useCallback(() => {
     isPanningRef.current = false;
@@ -344,15 +328,8 @@ function MermaidApp() {
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    if (displayMode === "inline") {
-      setPanZoom((prev) => ({
-        ...prev,
-        scale: Math.max(0.1, Math.min(5, prev.scale * delta)),
-      }));
-    } else {
-      setPreviewZoom((prev) => Math.max(0.1, Math.min(5, prev * delta)));
-    }
-  }, [displayMode]);
+    setPreviewZoom((prev) => Math.max(0.1, Math.min(5, prev * delta)));
+  }, []);
 
   // Theme change handler
   const handleThemeChange = useCallback(async (newTheme: string) => {
@@ -672,19 +649,11 @@ function MermaidApp() {
       <div
         ref={viewportRef}
         className="svg-viewport"
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        onWheel={handleWheel}
-        style={{ cursor: isPanningRef.current ? "grabbing" : "grab" }}
+        style={{ cursor: "default" }}
       >
         <div
           ref={svgContainerRef}
           className="svg-pannable"
-          style={{
-            transform: `translate(${panZoom.translateX}px, ${panZoom.translateY}px) scale(${panZoom.scale})`,
-          }}
           dangerouslySetInnerHTML={{ __html: renderedSvg }}
         />
         {isOverflowing && !isStreaming && (
