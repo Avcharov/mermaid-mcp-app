@@ -605,13 +605,13 @@ function MermaidApp() {
             </select>
             <button 
               onClick={handleExport} 
-              className="icon-btn" 
+              className={`icon-btn ${exportSuccess ? 'export-success' : ''}`}
               title="Export SVG" 
               disabled={isExporting}
-              style={{ display: 'flex', alignItems: 'center', gap: 4, minWidth: exportSuccess ? 80 : 'auto' }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
             >
               {isExporting ? <SpinnerIcon /> : <DownloadIcon />}
-              {exportSuccess && <span style={{ fontSize: '0.75rem' }}>Copied!</span>}
+              {exportSuccess && <span className="export-text">Copied!</span>}
             </button>
             {isDev && (
               <button 
