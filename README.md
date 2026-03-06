@@ -166,7 +166,6 @@ mermaid-mcp-app/
 - [MCP SDK](https://github.com/modelcontextprotocol/sdk) - Model Context Protocol
 - [ext-apps](https://github.com/modelcontextprotocol/ext-apps) - MCP Apps extension
 - [Mermaid.js](https://mermaid.js.org/) - Diagram generation
-- [SVGO](https://github.com/svg/svgo) - SVG optimization (server-side)
 - [React 19](https://react.dev/) - UI framework
 - [Vite](https://vitejs.dev/) - Build tool
 - [TypeScript](https://www.typescriptlang.org/) - Type safety

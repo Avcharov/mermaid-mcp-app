@@ -2,6 +2,7 @@ import { useApp } from "@modelcontextprotocol/ext-apps/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import mermaid from "mermaid";
+import pako from "pako";
 import { lightVars, darkVars } from "./theme-vars";
 import "./global.css";
 
@@ -29,26 +30,20 @@ const ExpandIcon = () => (
   </svg>
 );
 
-const DownloadIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M2 11v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2" />
-    <path d="M8 2v9" />
-    <path d="M5 8l3 3 3-3" />
-  </svg>
-);
-
-const SpinnerIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="spin">
-    <path d="M8 1a7 7 0 1 0 7 7" />
-  </svg>
-);
-
 const CollapseIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M1.5 8.5H5.5V12.5" />
     <path d="M12.5 5.5H8.5V1.5" />
     <path d="M5.5 8.5L1.5 12.5" />
     <path d="M8.5 5.5L12.5 1.5" />
+  </svg>
+);
+
+const ExternalLinkIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 7.5V11.5C11 12.05 10.55 12.5 10 12.5H2.5C1.95 12.5 1.5 12.05 1.5 11.5V4C1.5 3.45 1.95 3 2.5 3H6.5" />
+    <path d="M9 1.5H12.5V5" />
+    <path d="M5.5 8.5L12.5 1.5" />
   </svg>
 );
 
@@ -126,6 +121,22 @@ const fixSubgraphCycles = (syntax: string): string => {
   return fixed;
 };
 
+/**
+ * Compress a string with pako deflate and return base64url-encoded result.
+ * Matches mermaid.live's encoding: pako.deflate(level:9) + URL-safe base64.
+ */
+const deflateToBase64Url = (input: string): string => {
+  const data = new TextEncoder().encode(input);
+  const compressed = pako.deflate(data, { level: 9 });
+  const chunks: string[] = [];
+  const chunkSize = 8192;
+  for (let i = 0; i < compressed.length; i += chunkSize) {
+    const slice = compressed.subarray(i, Math.min(i + chunkSize, compressed.length));
+    chunks.push(String.fromCharCode(...slice));
+  }
+  return btoa(chunks.join('')).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+
 function MermaidApp() {
   const [hostDark, setHostDark] = useState(detectDarkMode);
   const [diagramState, setDiagramState] = useState<DiagramState>({
@@ -134,8 +145,6 @@ function MermaidApp() {
   });
   // Tracks the agent-provided built-in mermaid theme name (e.g. "forest", "neutral")
   const [agentCustomTheme, setAgentCustomTheme] = useState<string | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportSuccess, setExportSuccess] = useState(false);
   const agentCustomThemeRef = useRef<string | null>(null);
   const [renderedSvg, setRenderedSvg] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
@@ -349,65 +358,34 @@ function MermaidApp() {
     await renderMermaid(editedMermaid || diagramState.mermaid, newTheme, false);
   }, [editedMermaid, diagramState.mermaid]);
 
-  // Export handler: send raw SVG to server for SVGO optimization, then copy result to clipboard.
-  // Uses ClipboardItem with a deferred blob promise so clipboard.write() is called
-  // synchronously during the user gesture (preserving activation), while the
-  // actual optimized SVG data resolves asynchronously from the server.
-  const handleExport = useCallback(async () => {
-    if (!app || !renderedSvg || isExporting) return;
-    
-    setIsExporting(true);
+  // Open diagram in Mermaid Live Editor
+  const handleOpenInMermaidLive = useCallback(async () => {
+    if (!app) return;
+    const syntax = editedMermaid || diagramState.mermaid;
+    if (!syntax.trim()) return;
 
-    const svgPromise = (async () => {
-      try {
-        const result = await app.callServerTool({
-          name: "export_svg",
-          arguments: { svg: renderedSvg, format: "svg" },
-        });
-        const firstContent = result.content?.[0];
-        const optimizedSvg = (firstContent && "text" in firstContent ? firstContent.text : null) || renderedSvg;
-        console.info(`SVG optimized (${Math.round(optimizedSvg.length / 1024)}KB, was ${Math.round(renderedSvg.length / 1024)}KB)`);
-        return optimizedSvg;
-      } catch (err) {
-        console.error("SVGO optimization failed, using raw SVG:", err);
-        return renderedSvg;
-      }
-    })();
+    // Map our theme to mermaid.live theme names
+    let mermaidTheme = 'default';
+    if (diagramState.theme === 'dark') mermaidTheme = 'dark';
+    else if (diagramState.theme === 'custom' && agentCustomTheme) mermaidTheme = agentCustomTheme;
+
+    const state = JSON.stringify({
+      code: syntax,
+      mermaid: { theme: mermaidTheme },
+      autoSync: true,
+      updateDiagram: true,
+    });
 
     try {
-      const item = new ClipboardItem({
-        'text/plain': svgPromise.then(text => new Blob([text], { type: 'text/plain' })),
-      });
-      await navigator.clipboard.write([item]);
-      console.info("SVG copied to clipboard");
-      setExportSuccess(true);
-      setTimeout(() => setExportSuccess(false), 2000);
-    } catch (err) {
-      console.warn("ClipboardItem failed, trying fallback:", err);
-      const text = await svgPromise;
-      try {
-        await navigator.clipboard.writeText(text);
-        setExportSuccess(true);
-        setTimeout(() => setExportSuccess(false), 2000);
-      } catch {
-        const textarea = document.createElement("textarea");
-        textarea.value = text;
-        textarea.style.position = "fixed";
-        textarea.style.left = "-9999px";
-        document.body.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
-        try { 
-          document.execCommand("copy");
-          setExportSuccess(true);
-          setTimeout(() => setExportSuccess(false), 2000);
-        } catch {}
-        document.body.removeChild(textarea);
+      const encoded = deflateToBase64Url(state);
+      const { isError } = await app.openLink({ url: `https://mermaid.live/edit#pako:${encoded}` });
+      if (isError) {
+        console.warn('Host denied opening Mermaid Live link');
       }
-    } finally {
-      setIsExporting(false);
+    } catch (err) {
+      console.error('Failed to open Mermaid Live:', err);
     }
-  }, [app, renderedSvg, isExporting]);
+  }, [app, editedMermaid, diagramState.mermaid, diagramState.theme, agentCustomTheme]);
 
   // Calculate zoom + pan to fit and center the diagram in the viewport
   const calcFitView = useCallback((viewportEl: HTMLDivElement | null): { zoom: number; pan: { x: number; y: number } } => {
@@ -603,20 +581,18 @@ function MermaidApp() {
                 <option value="custom">Custom ({agentCustomTheme})</option>
               )}
             </select>
-            <button 
-              onClick={handleExport} 
-              className={`icon-btn ${exportSuccess ? 'export-success' : ''}`}
-              title="Export SVG" 
-              disabled={isExporting}
-              style={{ display: 'flex', alignItems: 'center', gap: 4 }}
+            <button
+              onClick={handleOpenInMermaidLive}
+              className="icon-btn"
+              title="Open in Mermaid Live Editor"
+              disabled={!(editedMermaid || diagramState.mermaid).trim()}
             >
-              {isExporting ? <SpinnerIcon /> : <DownloadIcon />}
-              {exportSuccess && <span className="export-text">Copied!</span>}
+              <ExternalLinkIcon />
             </button>
             {isDev && (
-              <button 
+              <button
                 onClick={handleFullscreenToggle}
-                className="icon-btn" 
+                className="icon-btn"
                 title="Exit Fullscreen (Dev)"
               >
                 <CollapseIcon />
@@ -675,6 +651,14 @@ function MermaidApp() {
         {diagramState.title && <h3 className="diagram-title">{diagramState.title}</h3>}
         <div className="toolbar">
           {isStreaming && <span className="streaming-indicator">Generating...</span>}
+          <button
+            onClick={handleOpenInMermaidLive}
+            className="icon-btn"
+            title="Open in Mermaid Live Editor"
+            disabled={!diagramState.mermaid.trim()}
+          >
+            <ExternalLinkIcon />
+          </button>
           <button onClick={handleFullscreenToggle} className="icon-btn" title="Fullscreen">
             <ExpandIcon />
           </button>

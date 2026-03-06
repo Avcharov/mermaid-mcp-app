@@ -86,25 +86,7 @@ body {
   cursor: not-allowed;
 }
 
-.icon-btn.export-success {
-  min-width: 80px;
-  width: auto;
-  padding: 0 8px;
-}
 
-.export-text {
-  font-size: 0.75rem;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.spin {
-  animation: spin 0.8s linear infinite;
-}
 
 .svg-container {
   flex: 1;

@@ -3,7 +3,6 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult, ReadResourceResult } from "@modelcontextprotocol/sdk/types.js";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { optimize } from "svgo";
 import { z } from "zod";
 
 // Works both from source (server.ts) and compiled (dist/server.js)
@@ -445,60 +444,6 @@ Call read_me first for full syntax reference.`
           },
         ],
         structuredContent: { checkpointId, theme, title },
-      };
-    },
-  );
-
-  // ============================================================
-  // Tool 3: export_svg (app-only, called by UI)
-  // ============================================================
-  registerAppTool(
-    server,
-    "export_svg",
-    {
-      description: "Export diagram as SVG or PNG. Called by the UI, not by the model.",
-      inputSchema: z.object({
-        svg: z.string().describe("SVG content to export"),
-        format: z.enum(["svg", "png"]).describe("Export format"),
-      }),
-      _meta: { ui: { visibility: ["app"] } },
-    },
-    async ({ svg, format }): Promise<CallToolResult> => {
-      if (format === "svg") {
-        // Optimize SVG with SVGO
-        const result = optimize(svg, {
-          multipass: true,
-          plugins: [
-            {
-              name: "preset-default",
-              params: {
-                overrides: {
-                  // Keep IDs that mermaid uses for styling
-                  cleanupIds: false,
-                  // Don't inline/modify CSS — Mermaid uses scoped class-based styles
-                  // for cluster/subgraph backgrounds that break when inlined
-                  inlineStyles: false,
-                  minifyStyles: false,
-                  // Round path coordinates to 2 decimal places (mermaid outputs 15+)
-                  convertPathData: { floatPrecision: 2 },
-                  // Round numeric values to 2 decimal places
-                  cleanupNumericValues: { floatPrecision: 2 },
-                },
-              },
-            },
-          ],
-        });
-        const optimizedSvg = result.data;
-        console.info(`SVGO: ${Math.round(svg.length / 1024)}KB → ${Math.round(optimizedSvg.length / 1024)}KB (${Math.round((1 - optimizedSvg.length / svg.length) * 100)}% reduction)`);
-        return {
-          content: [{ type: "text", text: optimizedSvg }],
-          structuredContent: { svg: optimizedSvg, format },
-        };
-      }
-      
-      return {
-        content: [{ type: "text", text: "PNG export not yet implemented. Use SVG format." }],
-        isError: true,
       };
     },
   );
